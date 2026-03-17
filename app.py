@@ -6,63 +6,48 @@ from groq import Groq
 # 1. Page Config
 st.set_page_config(page_title="ViralFinder AI", page_icon="🎬", layout="centered")
 
-# Classic Minimal UI Styling
-st.markdown("""
+# Safe Minimal CSS (Using st.html for 2026 stability)
+st.html("""
     <style>
-    /* Main Background */
-    .stApp {
-        background-color: #F8FAFC;
-    }
-    /* Clean Cards for Data */
-    .stDataFrame, .stTable {
-        background-color: white;
-        border-radius: 8px;
-        border: 1px solid #E2E8F0;
-    }
-    /* Minimalist Primary Button */
+    .stApp { background-color: #FFFFFF; }
+    header { visibility: hidden; }
     .stButton>button {
         width: 100%;
-        border-radius: 6px;
-        height: 3em;
-        background-color: #1E293B;
+        border-radius: 4px;
+        background-color: #000000;
         color: white;
         border: none;
-        transition: 0.3s;
+        height: 3em;
     }
-    .stButton>button:hover {
-        background-color: #334155;
-        color: white;
-    }
-    /* Input Fields */
     .stTextInput>div>div>input {
-        background-color: white;
-        color: #1E293B;
-        border: 1px solid #CBD5E1;
+        background-color: #F9FAFB;
+        border: 1px solid #E5E7EB;
     }
     </style>
-    """, unsafe_allow_html=True)
+""")
 
 st.title("ViralFinder AI")
-st.write("Analyze YouTube trends and generate English content blueprints.")
+st.write("Clean. Minimal. Professional.")
 
-# 2. Sidebar & Secret Handling
+# 2. Sidebar & Secrets
 with st.sidebar:
-    st.header("Configuration")
-    if "GROQ_API_KEY" in st.secrets:
-        groq_key = st.secrets["GROQ_API_KEY"]
-        st.success("API Key Loaded")
-    else:
-        groq_key = st.text_input("Groq API Key", type="password")
+    st.header("Settings")
+    # Using .get to prevent crash if key is missing
+    groq_key = st.secrets.get("GROQ_API_KEY", "")
     
-    num_vids = st.slider("Video Scan Limit", 5, 50, 15)
+    if groq_key:
+        st.success("System: Online")
+    else:
+        groq_key = st.text_input("Enter Groq Key", type="password")
+    
+    num_vids = st.slider("Scan Depth", 5, 30, 15)
 
-# 3. Scraper Function
+# 3. Scraper
 def get_channel_data(search_query):
     ydl_opts = {
         'quiet': True,
         'extract_flat': True,
         'force_generic_extractor': True,
-        'extractor_args': {'youtube': {'player_client': ['tv', 'web_embedded']}},
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     try:
@@ -70,85 +55,62 @@ def get_channel_data(search_query):
             search_results = ydl.extract_info(f"ytsearch1:{search_query} channel", download=False)
             if not search_results or not search_results['entries']:
                 return None, "Channel not found."
-            first_result = search_results['entries'][0]
-            channel_url = first_result.get('channel_url') or first_result.get('url')
-            channel_name = first_result.get('uploader', 'Unknown')
-            dict_meta = ydl.extract_info(f"{channel_url}/videos", download=False)
-            videos = dict_meta['entries'][:num_vids]
-            data = [{"Title": v['title'], "Views": v.get('view_count', 0)} for v in videos if v.get('title')]
-            return data, channel_name
+            
+            first = search_results['entries'][0]
+            url = first.get('channel_url') or first.get('url')
+            name = first.get('uploader', 'Channel')
+            
+            meta = ydl.extract_info(f"{url}/videos", download=False)
+            vids = meta['entries'][:num_vids]
+            
+            data = [{"Title": v['title'], "Views": v.get('view_count', 0)} for v in vids if v.get('title')]
+            return data, name
     except Exception as e:
-        return None, f"Error: {str(e)}"
+        return None, str(e)
 
-# 4. Main UI Logic
-channel_input = st.text_input("Channel Handle", placeholder="@MagnatesMedia")
+# 4. App Logic
+channel_input = st.text_input("YouTube Handle", placeholder="@MagnatesMedia")
 
-if st.button("Generate Analysis"):
+if st.button("Run Analysis"):
     if not groq_key:
-        st.error("Please provide an API Key.")
+        st.error("Missing API Key.")
     elif not channel_input:
-        st.warning("Enter a channel handle.")
+        st.warning("Please enter a handle.")
     else:
-        with st.spinner("Processing..."):
-            data, name_found = get_channel_data(channel_input)
+        with st.spinner("Scanning..."):
+            data, name = get_channel_data(channel_input)
             if data:
-                st.info(f"Analyzing: {name_found}")
+                st.subheader(f"Data for {name}")
                 df = pd.DataFrame(data)
-                avg_views = df['Views'].mean()
-                outliers = df[df['Views'] > (avg_views * 1.1)].sort_values(by='Views', ascending=False)
+                avg = df['Views'].mean()
+                # Find videos 10% above average
+                outliers = df[df['Views'] > (avg * 1.1)].sort_values(by='Views', ascending=False)
                 
-                st.subheader("Top Performing Content")
-                st.dataframe(outliers, use_container_width=True, hide_index=True)
+                st.table(outliers)
                 
                 try:
                     client = Groq(api_key=groq_key)
-                    top_titles = ", ".join(outliers['Title'].tolist()[:5])
+                    titles = ", ".join(outliers['Title'].tolist()[:5])
                     
-                    prompt = (f"Analyze these YouTube titles: {top_titles}. "
-                              "1. Identify the 'Hook'. "
-                              "2. Suggest 5 new titles for History/Business/Psychology. "
-                              "3. Provide a 1-sentence English opening for each. "
-                              "Output strictly in English.")
+                    prompt = (f"Analyze: {titles}. 1. Identify Hook. 2. Suggest 5 new English titles. "
+                              "3. 1-sentence English opening. NO BANGLA.")
                     
-                    completion = client.chat.completions.create(
+                    chat = client.chat.completions.create(
                         messages=[{"role": "user", "content": prompt}],
                         model="llama-3.1-8b-instant", 
                     )
                     
-                    ai_output = completion.choices[0].message.content
+                    result = chat.choices[0].message.content
                     st.divider()
-                    st.subheader("Content Strategy")
-                    st.markdown(ai_output)
-
-                    # --- Copy to Clipboard Implementation ---
-                    st.divider()
-                    # Using a simple HTML/JS snippet for the copy function
-                    copy_code = f"""
-                    <script>
-                    function copyToClipboard() {{
-                        const text = `{ai_output}`;
-                        navigator.clipboard.writeText(text).then(() => {{
-                            alert("Results copied to clipboard!");
-                        }});
-                    }}
-                    </script>
-                    <button onclick="copyToClipboard()" style="
-                        width: 100%;
-                        background-color: #10B981;
-                        color: white;
-                        border: none;
-                        padding: 10px;
-                        border-radius: 6px;
-                        cursor: pointer;
-                        font-weight: bold;
-                    ">📋 Copy Strategy to Clipboard</button>
-                    """
-                    st.components.v1.html(copy_code, height=60)
-
-                except Exception as ai_err:
-                    st.error(f"AI Error: {str(ai_err)}")
+                    st.subheader("English Content Strategy")
+                    
+                    # 📋 SAFE COPY AREA
+                    st.text_area("Select and Copy below:", value=result, height=350)
+                    
+                except Exception as e:
+                    st.error(f"AI Error: {e}")
             else:
-                st.error(f"Error: {name_found}")
+                st.error(f"Search Error: {name}")
 
 st.divider()
-st.caption("ViralFinder AI • Classic Minimal Design")
+st.caption("ViralFinder AI • v2.1 Stable")
