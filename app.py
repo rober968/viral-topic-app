@@ -3,7 +3,6 @@ import yt_dlp
 import pandas as pd
 from groq import Groq
 import time
-import plotly.express as px
 from datetime import datetime
 
 # 1. Page Config
@@ -47,6 +46,7 @@ st.html("""
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.5rem;
         animation: fadeInUp 0.8s ease;
+        text-align: center;
     }
     
     .gradient-subtitle {
@@ -54,6 +54,7 @@ st.html("""
         color: #A0AEC0;
         margin-bottom: 2rem;
         animation: fadeInUp 1s ease;
+        text-align: center;
     }
     
     /* Card Styles */
@@ -117,11 +118,18 @@ st.html("""
         border-right: 1px solid rgba(255, 255, 255, 0.1);
     }
     
-    .sidebar-content {
+    [data-testid="stSidebar"] .sidebar-content {
         padding: 2rem 1rem;
     }
     
     /* Metrics */
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+    
     .metric-card {
         background: rgba(255, 255, 255, 0.03);
         border-radius: 16px;
@@ -136,6 +144,7 @@ st.html("""
         background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        line-height: 1.2;
     }
     
     .metric-label {
@@ -143,6 +152,14 @@ st.html("""
         font-size: 0.9rem;
         text-transform: uppercase;
         letter-spacing: 1px;
+    }
+    
+    /* Feature Grid */
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin: 2rem 0;
     }
     
     /* Table */
@@ -154,6 +171,7 @@ st.html("""
         background: rgba(255, 255, 255, 0.03) !important;
         border-radius: 16px !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        width: 100%;
     }
     
     .stTable th {
@@ -242,23 +260,44 @@ st.html("""
         color: #A0AEC0;
         border: 1px solid rgba(102, 126, 234, 0.3);
     }
+    
+    /* Channel Header */
+    .channel-header {
+        margin: 2rem 0;
+    }
+    
+    .channel-header h2 {
+        color: white;
+        font-size: 1.8rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .channel-header p {
+        color: #A0AEC0;
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 2rem;
+        color: #718096;
+        font-size: 0.9rem;
+    }
 </style>
 """)
 
 # 3. Header Section with Animation
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.html("""
-    <div style='text-align: center; margin: 2rem 0;'>
-        <div class='gradient-title'>ViralVision AI</div>
-        <div class='gradient-subtitle'>Uncover Viral Topics • Analyze Competitors • Generate Winning Ideas</div>
-    </div>
-    """)
+st.html("""
+<div style='margin: 2rem 0;'>
+    <div class='gradient-title'>ViralVision AI</div>
+    <div class='gradient-subtitle'>Uncover Viral Topics • Analyze Competitors • Generate Winning Ideas</div>
+</div>
+""")
 
 # 4. Sidebar with Enhanced UI
 with st.sidebar:
     st.html("""
-    <div class='sidebar-content'>
+    <div style='padding: 1rem;'>
         <div style='text-align: center; margin-bottom: 2rem;'>
             <span class='badge'>⚡ BETA v2.0</span>
         </div>
@@ -266,7 +305,12 @@ with st.sidebar:
     
     st.markdown("### 🛠️ Configuration")
     
-    groq_key = st.secrets.get("GROQ_API_KEY", "")
+    # Try to get API key from secrets, otherwise let user input
+    groq_key = ""
+    try:
+        groq_key = st.secrets.get("GROQ_API_KEY", "")
+    except:
+        pass
     
     if not groq_key:
         groq_key = st.text_input(
@@ -275,6 +319,8 @@ with st.sidebar:
             placeholder="Enter your API key",
             help="Get your API key from console.groq.com"
         )
+    else:
+        st.success("✅ API Key loaded from secrets")
     
     # Modern slider
     num_vids = st.slider(
@@ -290,15 +336,13 @@ with st.sidebar:
     
     niche = st.selectbox(
         "Content Niche",
-        ["Business", "Technology", "Psychology", "History", "Entertainment", "Education"],
+        ["Business", "Technology", "Psychology", "History", "Entertainment", "Education", "Gaming", "Sports"],
         help="Select your content category for better recommendations"
     )
     
-    include_comments = st.checkbox("💬 Include sentiment analysis", value=False, disabled=True)
-    
     st.html("""
     <hr>
-    <div style='text-align: center; color: #718096; font-size: 0.9rem;'>
+    <div style='text-align: center; color: #718096; font-size: 0.9rem; padding: 1rem 0;'>
         Made with ❤️ by ViralVision Team
     </div>
     </div>
@@ -310,17 +354,17 @@ col1, col2 = st.columns([3, 1])
 with col1:
     channel_input = st.text_input(
         "",  # Empty label for cleaner look
-        placeholder="Enter YouTube channel handle (e.g., @MrBeast)",
+        placeholder="Enter YouTube channel handle (e.g., @MrBeast, @MagnatesMedia)",
         key="channel_input"
     )
 
 with col2:
     analyze_button = st.button("🚀 Generate Viral Blueprint", use_container_width=True)
 
-# 6. Feature Highlights
-if 'data' not in st.session_state:
+# 6. Feature Highlights (only show if no analysis has been done)
+if 'analysis_done' not in st.session_state:
     st.html("""
-    <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin: 2rem 0;'>
+    <div class='feature-grid'>
         <div class='card' style='text-align: center;'>
             <div style='font-size: 2rem; margin-bottom: 1rem;'>🎯</div>
             <h3 style='color: white; margin-bottom: 0.5rem;'>Competitor Analysis</h3>
@@ -345,10 +389,11 @@ def get_channel_data(search_query, num_vids):
         'quiet': True,
         'extract_flat': True,
         'force_generic_extractor': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Search for channel
             search_results = ydl.extract_info(f"ytsearch1:{search_query} channel", download=False)
             if not search_results or not search_results.get('entries'):
                 return None, "Channel not found."
@@ -357,23 +402,34 @@ def get_channel_data(search_query, num_vids):
             url = first.get('channel_url') or first.get('url')
             name = first.get('uploader', 'Channel')
             
-            with st.spinner(f"📡 Fetching videos from {name}..."):
-                meta = ydl.extract_info(f"{url}/videos", download=False)
-                vids = meta.get('entries', [])[:num_vids]
-                
-                data = []
-                for v in vids:
-                    if v.get('title'):
-                        data.append({
-                            "Title": v['title'],
-                            "Views": v.get('view_count', 0),
-                            "Likes": v.get('like_count', 0),
-                            "Comments": v.get('comment_count', 0)
-                        })
-                
-                return data, name
+            # Get videos
+            meta = ydl.extract_info(f"{url}/videos", download=False)
+            vids = meta.get('entries', [])[:num_vids]
+            
+            data = []
+            for v in vids:
+                if v.get('title'):
+                    data.append({
+                        "Title": v['title'],
+                        "Views": v.get('view_count', 0),
+                        "Duration": v.get('duration', 0),
+                        "Upload Date": v.get('upload_date', 'Unknown')
+                    })
+            
+            return data, name
     except Exception as e:
         return None, str(e)
+
+def format_number(num):
+    """Format large numbers with K/M/B suffix"""
+    if num >= 1_000_000_000:
+        return f"{num/1_000_000_000:.1f}B"
+    elif num >= 1_000_000:
+        return f"{num/1_000_000:.1f}M"
+    elif num >= 1_000:
+        return f"{num/1_000:.1f}K"
+    else:
+        return str(num)
 
 if analyze_button:
     if not groq_key:
@@ -386,82 +442,97 @@ if analyze_button:
         status_text = st.empty()
         
         # Phase 1: Data Collection
-        status_text.text("Phase 1/3: Collecting channel data...")
+        status_text.text("📡 Phase 1/3: Collecting channel data...")
         progress_bar.progress(25)
         
         data, name = get_channel_data(channel_input, num_vids)
         
         if data:
             # Phase 2: Data Analysis
-            status_text.text("Phase 2/3: Analyzing video performance...")
+            status_text.text("📊 Phase 2/3: Analyzing video performance...")
             progress_bar.progress(50)
-            time.sleep(1)  # Smooth transition
+            time.sleep(0.5)  # Smooth transition
             
             df = pd.DataFrame(data)
             avg_views = df['Views'].mean()
+            total_views = df['Views'].sum()
             outliers = df[df['Views'] > (avg_views * 1.2)].sort_values(by='Views', ascending=False)
             
-            # Display Results in Columns
+            # Display Metrics in a grid
+            st.html("<div class='metric-grid'>")
+            
             col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.html(f"""
                 <div class='metric-card'>
                     <div class='metric-value'>{len(data)}</div>
-                    <div class='metric-label'>Total Videos Analyzed</div>
+                    <div class='metric-label'>Videos Analyzed</div>
                 </div>
                 """)
             
             with col2:
                 st.html(f"""
                 <div class='metric-card'>
-                    <div class='metric-value'>{len(outliers)}</div>
-                    <div class='metric-label'>Viral Candidates</div>
+                    <div class='metric-value'>{format_number(total_views)}</div>
+                    <div class='metric-label'>Total Views</div>
                 </div>
                 """)
             
             with col3:
+                viral_count = len(outliers)
                 st.html(f"""
                 <div class='metric-card'>
-                    <div class='metric-value'>{avg_views:,.0f}</div>
-                    <div class='metric-label'>Average Views</div>
+                    <div class='metric-value'>{viral_count}</div>
+                    <div class='metric-label'>Viral Candidates</div>
                 </div>
                 """)
             
+            st.html("</div>")
+            
             # Channel Header
             st.html(f"""
-            <div style='margin: 2rem 0;'>
-                <h2 style='color: white; font-size: 1.8rem;'>{name} Analysis</h2>
-                <p style='color: #A0AEC0;'>Top performing videos identified</p>
+            <div class='channel-header'>
+                <h2>📺 {name} Analysis</h2>
+                <p>Top performing videos identified • Avg. Views: {format_number(avg_views)}</p>
             </div>
             """)
             
             # Display Top Videos
             if not outliers.empty:
                 st.subheader("🔥 Top Performing Videos")
-                st.table(outliers[['Title', 'Views']].head(10))
+                
+                # Prepare display dataframe
+                display_df = outliers[['Title', 'Views']].head(10).copy()
+                display_df['Views'] = display_df['Views'].apply(format_number)
+                display_df.index = range(1, len(display_df) + 1)
+                
+                st.table(display_df)
                 
                 # Phase 3: AI Analysis
-                status_text.text("Phase 3/3: Generating AI insights...")
+                status_text.text("🤖 Phase 3/3: Generating AI insights...")
                 progress_bar.progress(75)
                 
                 try:
                     client = Groq(api_key=groq_key)
-                    titles_list = ", ".join(outliers['Title'].tolist()[:5])
+                    titles_list = "\n".join([f"- {title}" for title in outliers['Title'].tolist()[:5]])
                     
                     prompt = f"""As a YouTube content strategist, analyze these viral titles in the {niche} niche:
-                    {titles_list}
-                    
-                    Provide:
-                    1. 🎣 Common Hook Patterns (list 3 patterns found)
-                    2. 💡 5 Viral Title Suggestions for {niche} content
-                    3. 📝 3 Opening Hook Templates (30 words each)
-                    4. 🔥 Trending Topics in this space
-                    
-                    Format with emojis and clear sections. Keep it actionable.
-                    """
-                    
-                    with st.spinner("🤖 AI is generating insights..."):
+
+Top Performing Titles:
+{titles_list}
+
+Based on this analysis, provide:
+
+1. 🎣 **Common Hook Patterns** (identify 3 patterns used in these titles)
+2. 💡 **5 Viral Title Suggestions** for {niche} content (make them clickable)
+3. 📝 **3 Opening Hook Templates** (30 words each, engaging openings)
+4. 🔥 **Trending Topics** in this niche right now
+5. ⚡ **Content Strategy Tips** (3 actionable tips)
+
+Format with clear sections and emojis. Make it practical and actionable for a YouTuber."""
+
+                    with st.spinner("🧠 AI is generating insights..."):
                         chat = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
                             model="llama-3.1-8b-instant",
@@ -471,16 +542,13 @@ if analyze_button:
                     
                     progress_bar.progress(100)
                     status_text.text("✅ Analysis complete!")
+                    time.sleep(0.5)
                     
                     result = chat.choices[0].message.content
                     
-                    # Display AI Results in Card
-                    st.html("""
-                    <hr>
-                    <div style='margin: 2rem 0;'>
-                        <h2 style='color: white; font-size: 1.8rem;'>🧠 AI Strategy Insights</h2>
-                    </div>
-                    """)
+                    # Display AI Results
+                    st.markdown("---")
+                    st.subheader("🧠 AI Strategy Insights")
                     
                     with st.container():
                         st.markdown(result)
@@ -488,37 +556,54 @@ if analyze_button:
                         # Export buttons
                         col1, col2 = st.columns(2)
                         with col1:
-                            if st.button("📋 Copy to Clipboard", use_container_width=True):
-                                st.write("Copied! (Clipboard functionality requires additional setup)")
+                            # Create a text representation of the results
+                            export_text = f"ViralVision AI Analysis for {name}\n"
+                            export_text += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                            export_text += f"Niche: {niche}\n"
+                            export_text += "-" * 50 + "\n\n"
+                            export_text += result
+                            
+                            st.download_button(
+                                label="📋 Export as Text",
+                                data=export_text,
+                                file_name=f"viral_insights_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                                mime="text/plain",
+                                use_container_width=True
+                            )
                         
                         with col2:
-                            csv = outliers[['Title', 'Views']].to_csv(index=False)
+                            # Export video data as CSV
+                            csv_data = "Title,Views\n"
+                            for _, row in outliers.head(20).iterrows():
+                                csv_data += f'"{row["Title"]}",{row["Views"]}\n'
+                            
                             st.download_button(
-                                label="📥 Download CSV",
-                                data=csv,
-                                file_name=f"viral_{channel_input.replace('@', '')}_{datetime.now().strftime('%Y%m%d')}.csv",
+                                label="📥 Download Video Data",
+                                data=csv_data,
+                                file_name=f"viral_videos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                                 mime="text/csv",
                                 use_container_width=True
                             )
                     
+                    # Mark that analysis is done
+                    st.session_state.analysis_done = True
+                    
                 except Exception as e:
-                    st.error(f"AI Error: {e}")
+                    st.error(f"🤖 AI Error: {str(e)}")
             else:
-                st.info("No viral candidates found in this dataset")
+                st.info("ℹ️ No viral candidates found in this dataset. Try analyzing more videos or a different channel.")
         else:
-            st.error(f"Error: {name}")
+            st.error(f"❌ Error: {name}")
         
         # Clear progress indicators
-        time.sleep(1)
         progress_bar.empty()
         status_text.empty()
 
 # Footer
 st.html("""
 <hr>
-<div style='text-align: center; padding: 2rem;'>
-    <p style='color: #718096; font-size: 0.9rem;'>
-        ViralVision AI • Advanced YouTube Topic Analysis • Powered by Groq AI
-    </p>
+<div class='footer'>
+    <p>ViralVision AI • Advanced YouTube Topic Analysis • Powered by Groq AI</p>
+    <p style='margin-top: 0.5rem; font-size: 0.8rem;'>© 2024 ViralVision • All rights reserved</p>
 </div>
 """)
