@@ -7,7 +7,7 @@ import time
 # 1. Page Config
 st.set_page_config(page_title="ViralFinder AI", page_icon="🎬", layout="wide")
 
-# Custom CSS to make it look like a premium Android App
+# Corrected CSS section - replaced 'unsafe_allow_status_code' with 'unsafe_allow_html'
 st.markdown("""
     <style>
     .main {
@@ -19,9 +19,14 @@ st.markdown("""
         height: 3em;
         background-color: #3B82F6;
         color: white;
+        font-weight: bold;
+    }
+    .stTextInput>div>div>input {
+        background-color: #1E293B;
+        color: white;
     }
     </style>
-    """, unsafe_allow_status_code=True)
+    """, unsafe_allow_html=True)
 
 st.title("🎬 ViralFinder AI")
 st.caption("Identify viral outliers and generate content strategies for Class 8 Students & Creators.")
@@ -43,7 +48,7 @@ with st.sidebar:
     num_vids = st.slider("Analyze last X videos", 5, 50, 20)
     st.info("Tip: Keeping this under 25 prevents YouTube from blocking the scraper.")
 
-# 3. Scraper Function (Stealth Mode for 2026)
+# 3. Scraper Function (Optimized for Realme C25s performance)
 def get_channel_data(search_query):
     ydl_opts = {
         'quiet': True,
