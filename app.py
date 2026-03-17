@@ -2,133 +2,153 @@ import streamlit as st
 import yt_dlp
 import pandas as pd
 from groq import Groq
-import time
 
 # 1. Page Config
-st.set_page_config(page_title="ViralFinder AI", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="ViralFinder AI", page_icon="🎬", layout="centered")
 
-# Custom CSS to make it look like a premium Android App
+# Classic Minimal UI Styling
 st.markdown("""
     <style>
-    .main {
-        background-color: #0F172A;
+    /* Main Background */
+    .stApp {
+        background-color: #F8FAFC;
     }
+    /* Clean Cards for Data */
+    .stDataFrame, .stTable {
+        background-color: white;
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+    }
+    /* Minimalist Primary Button */
     .stButton>button {
         width: 100%;
-        border-radius: 10px;
+        border-radius: 6px;
         height: 3em;
-        background-color: #3B82F6;
+        background-color: #1E293B;
+        color: white;
+        border: none;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #334155;
         color: white;
     }
+    /* Input Fields */
+    .stTextInput>div>div>input {
+        background-color: white;
+        color: #1E293B;
+        border: 1px solid #CBD5E1;
+    }
     </style>
-    """, unsafe_allow_status_code=True)
+    """, unsafe_allow_html=True)
 
-st.title("🎬 ViralFinder AI")
-st.caption("Identify viral outliers and generate content strategies for Class 8 Students & Creators.")
+st.title("ViralFinder AI")
+st.write("Analyze YouTube trends and generate English content blueprints.")
 
-# 2. Sidebar & Secret Handling (The "Auto-Look" Logic)
+# 2. Sidebar & Secret Handling
 with st.sidebar:
-    st.header("⚙️ App Settings")
-    
-    # Check if the key exists in Streamlit Secrets
+    st.header("Configuration")
     if "GROQ_API_KEY" in st.secrets:
         groq_key = st.secrets["GROQ_API_KEY"]
-        st.success("✅ API Key loaded from Secrets!")
+        st.success("API Key Loaded")
     else:
-        # Fallback to manual input if Secrets are empty
-        groq_key = st.text_input("Enter Groq API Key", type="password")
-        st.warning("⚠️ Key not found in Secrets. Please enter it manually or add it to Streamlit Settings.")
+        groq_key = st.text_input("Groq API Key", type="password")
     
-    st.divider()
-    num_vids = st.slider("Analyze last X videos", 5, 50, 20)
-    st.info("Tip: Keeping this under 25 prevents YouTube from blocking the scraper.")
+    num_vids = st.slider("Video Scan Limit", 5, 50, 15)
 
-# 3. Scraper Function (Stealth Mode for 2026)
+# 3. Scraper Function
 def get_channel_data(search_query):
     ydl_opts = {
         'quiet': True,
         'extract_flat': True,
         'force_generic_extractor': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['tv', 'web_embedded'],
-                'skip': ['dash', 'hls']
-            }
-        },
+        'extractor_args': {'youtube': {'player_client': ['tv', 'web_embedded']}},
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Search for the channel handle or name
             search_results = ydl.extract_info(f"ytsearch1:{search_query} channel", download=False)
             if not search_results or not search_results['entries']:
                 return None, "Channel not found."
-            
             first_result = search_results['entries'][0]
             channel_url = first_result.get('channel_url') or first_result.get('url')
-            channel_name = first_result.get('uploader', 'Unknown Channel')
-            
-            # Fetch video list
+            channel_name = first_result.get('uploader', 'Unknown')
             dict_meta = ydl.extract_info(f"{channel_url}/videos", download=False)
             videos = dict_meta['entries'][:num_vids]
-            
-            data = [{"title": v['title'], "views": v.get('view_count', 0)} for v in videos if v.get('title')]
+            data = [{"Title": v['title'], "Views": v.get('view_count', 0)} for v in videos if v.get('title')]
             return data, channel_name
-            
     except Exception as e:
-        return None, f"Scraper Error: {str(e)}"
+        return None, f"Error: {str(e)}"
 
 # 4. Main UI Logic
-channel_input = st.text_input("YouTube Handle or Channel Name", placeholder="@JamesJani")
+channel_input = st.text_input("Channel Handle", placeholder="@MagnatesMedia")
 
-if st.button("🚀 Generate Viral Blueprint"):
+if st.button("Generate Analysis"):
     if not groq_key:
-        st.error("Missing API Key! Please add it to Streamlit Secrets or the sidebar.")
+        st.error("Please provide an API Key.")
     elif not channel_input:
-        st.warning("Please enter a channel handle to begin.")
+        st.warning("Enter a channel handle.")
     else:
-        with st.spinner(f"Scanning {channel_input}..."):
+        with st.spinner("Processing..."):
             data, name_found = get_channel_data(channel_input)
-            
             if data:
-                st.success(f"Connected to: {name_found}")
+                st.info(f"Analyzing: {name_found}")
                 df = pd.DataFrame(data)
+                avg_views = df['Views'].mean()
+                outliers = df[df['Views'] > (avg_views * 1.1)].sort_values(by='Views', ascending=False)
                 
-                # Logic: Identify "Outliers" (Videos performing 20% better than average)
-                avg_views = df['views'].mean()
-                outliers = df[df['views'] > (avg_views * 1.2)].sort_values(by='views', ascending=False)
+                st.subheader("Top Performing Content")
+                st.dataframe(outliers, use_container_width=True, hide_index=True)
                 
-                # Display Results Table
-                st.subheader("📊 Viral Outlier Data")
-                st.dataframe(outliers[['title', 'views']], use_container_width=True)
-                
-                # AI Analysis with Groq (Llama 3)
                 try:
                     client = Groq(api_key=groq_key)
-                    top_titles = ", ".join(outliers['title'].tolist()[:5])
+                    top_titles = ", ".join(outliers['Title'].tolist()[:5])
                     
-                    # Prompt tailored for History/Business/Psychology niche
-                    prompt = (f"Analyze these high-performing YouTube titles: {top_titles}. "
-                              "1. Identify the 'Hook' (Curiosity, Fear, or Desire). "
-                              "2. Based on this, suggest 5 new video titles for a niche channel about "
-                              "History, Business stories, or Dark Psychology. "
-                              "3. Write a 1-sentence opening hook in Bangla for each suggestion.")
+                    prompt = (f"Analyze these YouTube titles: {top_titles}. "
+                              "1. Identify the 'Hook'. "
+                              "2. Suggest 5 new titles for History/Business/Psychology. "
+                              "3. Provide a 1-sentence English opening for each. "
+                              "Output strictly in English.")
                     
                     completion = client.chat.completions.create(
                         messages=[{"role": "user", "content": prompt}],
-                        model="llama3-8b-8192",
+                        model="llama-3.1-8b-instant", 
                     )
                     
+                    ai_output = completion.choices[0].message.content
                     st.divider()
-                    st.subheader("🧠 AI-Generated Script Blueprint")
-                    st.markdown(completion.choices[0].message.content)
-                    
+                    st.subheader("Content Strategy")
+                    st.markdown(ai_output)
+
+                    # --- Copy to Clipboard Implementation ---
+                    st.divider()
+                    # Using a simple HTML/JS snippet for the copy function
+                    copy_code = f"""
+                    <script>
+                    function copyToClipboard() {{
+                        const text = `{ai_output}`;
+                        navigator.clipboard.writeText(text).then(() => {{
+                            alert("Results copied to clipboard!");
+                        }});
+                    }}
+                    </script>
+                    <button onclick="copyToClipboard()" style="
+                        width: 100%;
+                        background-color: #10B981;
+                        color: white;
+                        border: none;
+                        padding: 10px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: bold;
+                    ">📋 Copy Strategy to Clipboard</button>
+                    """
+                    st.components.v1.html(copy_code, height=60)
+
                 except Exception as ai_err:
                     st.error(f"AI Error: {str(ai_err)}")
             else:
-                st.error(f"Could not fetch data: {name_found}")
+                st.error(f"Error: {name_found}")
 
-# 5. Footer for Mobile
 st.divider()
-st.caption("Built for Realme C25s • Powered by Llama 3 & yt-dlp")
+st.caption("ViralFinder AI • Classic Minimal Design")
