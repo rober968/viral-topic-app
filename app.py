@@ -6,43 +6,72 @@ from groq import Groq
 # 1. Page Config
 st.set_page_config(page_title="ViralFinder AI", page_icon="🎬", layout="centered")
 
-# Safe Minimal CSS (Using st.html for 2026 stability)
+# 2. Force Black Theme CSS (Removes White Screen)
 st.html("""
     <style>
-    .stApp { background-color: #FFFFFF; }
+    /* Force Background to Black */
+    .stApp { 
+        background-color: #000000 !important; 
+        color: #FFFFFF !important; 
+    }
+    
+    /* Hide Streamlit Header */
     header { visibility: hidden; }
+    
+    /* Input Boxes: Dark Gray with White Text */
+    .stTextInput>div>div>input {
+        background-color: #1A1A1A !important;
+        color: white !important;
+        border: 1px solid #333333 !important;
+    }
+    
+    /* Sidebar: Deep Charcoal */
+    [data-testid="stSidebar"] {
+        background-color: #0D0D0D !important;
+    }
+    
+    /* Buttons: Electric Blue for Visibility on Black */
     .stButton>button {
         width: 100%;
-        border-radius: 4px;
-        background-color: #000000;
-        color: white;
+        border-radius: 6px;
+        background-color: #2563EB !important;
+        color: white !important;
         border: none;
-        height: 3em;
+        height: 3.5em;
+        font-weight: bold;
     }
-    .stTextInput>div>div>input {
-        background-color: #F9FAFB;
-        border: 1px solid #E5E7EB;
+    
+    /* Results Table */
+    .stTable {
+        background-color: #000000 !important;
+        color: white !important;
+    }
+    
+    /* Text Area for Copying */
+    .stTextArea>div>div>textarea {
+        background-color: #1A1A1A !important;
+        color: #34D399 !important; /* Green text for a 'Terminal' look */
+        border: 1px solid #333333 !important;
     }
     </style>
 """)
 
 st.title("ViralFinder AI")
-st.write("Clean. Minimal. Professional.")
+st.caption("Content Strategy Engine • Black Edition")
 
-# 2. Sidebar & Secrets
+# 3. Sidebar & Secrets
 with st.sidebar:
     st.header("Settings")
-    # Using .get to prevent crash if key is missing
     groq_key = st.secrets.get("GROQ_API_KEY", "")
     
     if groq_key:
-        st.success("System: Online")
+        st.success("API Status: Online")
     else:
         groq_key = st.text_input("Enter Groq Key", type="password")
     
-    num_vids = st.slider("Scan Depth", 5, 30, 15)
+    num_vids = st.slider("Analyze Videos", 5, 30, 15)
 
-# 3. Scraper
+# 4. Scraper Logic
 def get_channel_data(search_query):
     ydl_opts = {
         'quiet': True,
@@ -61,56 +90,4 @@ def get_channel_data(search_query):
             name = first.get('uploader', 'Channel')
             
             meta = ydl.extract_info(f"{url}/videos", download=False)
-            vids = meta['entries'][:num_vids]
-            
-            data = [{"Title": v['title'], "Views": v.get('view_count', 0)} for v in vids if v.get('title')]
-            return data, name
-    except Exception as e:
-        return None, str(e)
-
-# 4. App Logic
-channel_input = st.text_input("YouTube Handle", placeholder="@MagnatesMedia")
-
-if st.button("Run Analysis"):
-    if not groq_key:
-        st.error("Missing API Key.")
-    elif not channel_input:
-        st.warning("Please enter a handle.")
-    else:
-        with st.spinner("Scanning..."):
-            data, name = get_channel_data(channel_input)
-            if data:
-                st.subheader(f"Data for {name}")
-                df = pd.DataFrame(data)
-                avg = df['Views'].mean()
-                # Find videos 10% above average
-                outliers = df[df['Views'] > (avg * 1.1)].sort_values(by='Views', ascending=False)
-                
-                st.table(outliers)
-                
-                try:
-                    client = Groq(api_key=groq_key)
-                    titles = ", ".join(outliers['Title'].tolist()[:5])
-                    
-                    prompt = (f"Analyze: {titles}. 1. Identify Hook. 2. Suggest 5 new English titles. "
-                              "3. 1-sentence English opening. NO BANGLA.")
-                    
-                    chat = client.chat.completions.create(
-                        messages=[{"role": "user", "content": prompt}],
-                        model="llama-3.1-8b-instant", 
-                    )
-                    
-                    result = chat.choices[0].message.content
-                    st.divider()
-                    st.subheader("English Content Strategy")
-                    
-                    # 📋 SAFE COPY AREA
-                    st.text_area("Select and Copy below:", value=result, height=350)
-                    
-                except Exception as e:
-                    st.error(f"AI Error: {e}")
-            else:
-                st.error(f"Search Error: {name}")
-
-st.divider()
-st.caption("ViralFinder AI • v2.1 Stable")
+            vids = meta['entries'][:
